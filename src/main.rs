@@ -28,14 +28,13 @@ fn main() -> Result<()> {
         _ => panic!("Unhandled subcommand!")
     };
 
-    println!("Hello, world!");
-
     Ok(())
 }
 
 fn gc() -> Result<()> {
+    let tasks = get_all_tasks()?;
     // clean up sortOrder UDAs on non-focus tasks
-    clean_up_non_focus_tasks()?;
+    clean_up_non_focus_tasks(&tasks)?;
     // assign sortOrder on focus tasks
     assign_sort_order_where_missing()?;
     // compact sortOrder values on focus tasks
@@ -44,9 +43,19 @@ fn gc() -> Result<()> {
     Ok(())
 }
 
-fn clean_up_non_focus_tasks() -> Result<()> {
-    let tasks = get_all_tasks()?;
-    println!("{:?}", tasks);
+fn clean_up_non_focus_tasks(tasks: &Vec<Task>) -> Result<()> {
+    let mut task_ids_to_clean: Vec<String> = Vec::new();
+
+    for task in tasks {
+        if !task.tags.contains(&"focus".to_string()) && task.udas.contains_key("sortOrder") {
+            task_ids_to_clean.push(task.uuid.clone());
+        }
+    }
+
+    for task_id in task_ids_to_clean {
+        remove_sort_order(task_id)?;
+    }
+
     Ok(())
 }
 
@@ -60,8 +69,16 @@ fn compact_sort_order() -> Result<()> {
 
 fn get_all_tasks() -> Result<Vec<Task>> {
     let output = std::process::Command::new("task")
-        .args(["export"])
+        .args(["+PENDING", "export"])
         .output()?;
     let command_output = String::from_utf8(output.stdout)?;
     Ok(serde_json::from_str(command_output.as_str())?)
+}
+
+fn remove_sort_order(uuid: String) -> Result<()> {
+    std::process::Command::new("task")
+        .args([uuid.as_str(), "mod", "sortOrder:"])
+        .output()?;
+    // TODO: detect and handle the case where it didn't work
+    Ok(())
 }
