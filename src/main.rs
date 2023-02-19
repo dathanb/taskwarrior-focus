@@ -35,10 +35,8 @@ fn gc() -> Result<()> {
     let tasks = get_all_tasks()?;
     // clean up sortOrder UDAs on non-focus tasks
     clean_up_non_focus_tasks(&tasks)?;
-    // assign sortOrder on focus tasks
-    assign_sort_order_where_missing()?;
     // compact sortOrder values on focus tasks
-    compact_sort_order()?;
+    compact_sort_order(&tasks)?;
 
     Ok(())
 }
@@ -59,11 +57,30 @@ fn clean_up_non_focus_tasks(tasks: &Vec<Task>) -> Result<()> {
     Ok(())
 }
 
-fn assign_sort_order_where_missing() -> Result<()> {
-    Ok(())
-}
+fn compact_sort_order(tasks: &Vec<Task>) -> Result<()> {
+    let focused_tasks: Vec<&Task> = tasks.iter()
+                                         .filter(|t| t.tags.contains(&"focus".to_string()))
+                                         .collect();
 
-fn compact_sort_order() -> Result<()> {
+    struct TaskSortOrder(String, f64);
+    let mut sort_orders = Vec::new();
+    for task in focused_tasks {
+        let sort_order = match task.udas.get("sortOrder") {
+            Some(v) => serde_json::to_string(v)?,
+            None => "0.0".to_string()
+        };
+        let sort_order: f64 = sort_order.parse()?;
+        sort_orders.push(TaskSortOrder(task.uuid.clone(), sort_order));
+    }
+
+    sort_orders.sort_by(|a, b| a.1.total_cmp(&b.1));
+
+    let mut index = 1.0;
+    for task in sort_orders {
+        update_sort_order(task.0.as_str(), index)?;
+        index += 1.0;
+    }
+
     Ok(())
 }
 
@@ -78,6 +95,14 @@ fn get_all_tasks() -> Result<Vec<Task>> {
 fn remove_sort_order(uuid: String) -> Result<()> {
     std::process::Command::new("task")
         .args([uuid.as_str(), "mod", "sortOrder:"])
+        .output()?;
+    // TODO: detect and handle the case where it didn't work
+    Ok(())
+}
+
+fn update_sort_order(uuid: &str, sort_order: f64) -> Result<()> {
+    std::process::Command::new("task")
+        .args([uuid, "mod", format!("sortOrder:{}", sort_order).as_str()])
         .output()?;
     // TODO: detect and handle the case where it didn't work
     Ok(())
