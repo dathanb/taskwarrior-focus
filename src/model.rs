@@ -1,13 +1,15 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use anyhow::Result;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Task {
+    pub uuid: String,
+    pub id: Option<i64>,
     pub description: String,
     pub entry: String,
     pub modified: String,
     pub status: String,
-    pub uuid: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub urgency: Option<f64>,
     #[serde(default)]
@@ -15,6 +17,16 @@ pub struct Task {
     pub tags: Vec<String>,
     #[serde(flatten)]
     pub udas: Map<String, Value>
+}
+
+impl Task {
+    pub fn sort_order(&self) -> Result<f64> {
+        let sort_order = match self.udas.get("sortOrder") {
+            Some(v) => serde_json::to_string(v)?,
+            None => "0.0".to_string()
+        };
+        Ok(sort_order.parse::<f64>()?)
+    }
 }
 
 #[cfg(test)]

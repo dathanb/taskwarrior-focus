@@ -1,7 +1,9 @@
+#![feature(is_some_with)]
+
 mod model;
 
-use clap::{Arg, Command};
-use anyhow::Result;
+use clap::{Arg, ArgMatches, Command};
+use anyhow::{anyhow, Result};
 use crate::model::Task;
 
 fn main() -> Result<()> {
@@ -22,8 +24,8 @@ fn main() -> Result<()> {
         .get_matches();
 
     match matches.subcommand() {
-        Some(("gc", _)) => gc()?,
-        Some(("prioritize", _)) => panic!("Prioritize not implement"),
+        Some(("gc", _)) => handle_gc()?,
+        Some(("prioritize", sub_matches)) => handle_prioritize_cmd(sub_matches)?,
         Some(("deprioritize", _)) => panic!("Deprioritize not implemented"),
         _ => panic!("Unhandled subcommand!")
     };
@@ -31,12 +33,43 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn gc() -> Result<()> {
+fn handle_gc() -> Result<()> {
     let tasks = get_all_tasks()?;
     // clean up sortOrder UDAs on non-focus tasks
     clean_up_non_focus_tasks(&tasks)?;
     // compact sortOrder values on focus tasks
     compact_sort_order(&tasks)?;
+
+    Ok(())
+}
+
+fn handle_prioritize_cmd(sub_matches: &ArgMatches) -> Result<()> {
+    let id: &String = sub_matches.get_one::<String>("id").expect("id is a required option, so should always have a value");
+
+    let tasks = get_all_tasks()?;
+
+    let target_task = tasks.iter()
+        .find(|task| &task.uuid == id || task.id.is_some_and(|tid| &tid.to_string() == id))
+        .ok_or(anyhow!("No task with id {} found", id))?;
+
+    let focused_tasks: Vec<&Task> = tasks.iter()
+                                         .filter(|t| t.tags.contains(&"focus".to_string()))
+                                         .collect();
+
+    let mut min_sort_order = f64::MAX;
+    for task in focused_tasks {
+        let sort_order = task.sort_order()?;
+        min_sort_order = f64::min(min_sort_order, sort_order);
+    }
+
+    let current_sort_order = target_task.sort_order()?;
+
+    if current_sort_order == min_sort_order {
+        // it's already the highest-priority focused item, so no need to do anything
+        return Ok(());
+    }
+
+    prioritize(id.as_str(), min_sort_order - 1.0)?;
 
     Ok(())
 }
@@ -105,5 +138,14 @@ fn update_sort_order(uuid: &str, sort_order: f64) -> Result<()> {
         .args([uuid, "mod", format!("sortOrder:{}", sort_order).as_str()])
         .output()?;
     // TODO: detect and handle the case where it didn't work
+    Ok(())
+}
+
+fn prioritize(id: &str, new_sort_order: f64) -> Result<()> {
+    std::process::Command::new("task")
+        .args([id, "mod", format!("sortOrder:{}", new_sort_order).as_str()])
+        .output()?;
+    // TODO: detect and handle the case where it didn't work
+
     Ok(())
 }
