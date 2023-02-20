@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     match matches.subcommand() {
         Some(("gc", _)) => handle_gc()?,
         Some(("prioritize", sub_matches)) => handle_prioritize_cmd(sub_matches)?,
-        Some(("deprioritize", _)) => panic!("Deprioritize not implemented"),
+        Some(("deprioritize", sub_matches)) => handle_deprioritize_cmd(sub_matches)?,
         _ => panic!("Unhandled subcommand!")
     };
 
@@ -70,6 +70,37 @@ fn handle_prioritize_cmd(sub_matches: &ArgMatches) -> Result<()> {
     }
 
     prioritize(id.as_str(), min_sort_order - 1.0)?;
+
+    Ok(())
+}
+
+fn handle_deprioritize_cmd(sub_matches: &ArgMatches) -> Result<()> {
+    let id: &String = sub_matches.get_one::<String>("id").expect("id is a required option, so should always have a value");
+
+    let tasks = get_all_tasks()?;
+
+    let target_task = tasks.iter()
+                           .find(|task| &task.uuid == id || task.id.is_some_and(|tid| &tid.to_string() == id))
+                           .ok_or(anyhow!("No task with id {} found", id))?;
+
+    let focused_tasks: Vec<&Task> = tasks.iter()
+                                         .filter(|t| t.tags.contains(&"focus".to_string()))
+                                         .collect();
+
+    let mut max_sort_order = f64::MIN;
+    for task in focused_tasks {
+        let sort_order = task.sort_order()?;
+        max_sort_order = f64::max(max_sort_order, sort_order);
+    }
+
+    let current_sort_order = target_task.sort_order()?;
+
+    if current_sort_order == max_sort_order {
+        // it's already the highest-priority focused item, so no need to do anything
+        return Ok(());
+    }
+
+    prioritize(id.as_str(), max_sort_order + 1.0)?;
 
     Ok(())
 }
