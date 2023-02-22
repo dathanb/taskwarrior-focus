@@ -1,4 +1,25 @@
-# Focus: Opinionated task management for TaskWarrior
+# Focus: Opinionated task management
+
+This project is two main items:
+1. An integration layer to sync between the multiple task management systems I use: 
+    - Obsidian for collecting todos throughout the day
+    - Jira for work tasks
+    - TaskWarrior, where I actually manage my work queue and roadmap
+2. A CLI for working with tasks in TaskWarrior the way I want (described under "Workflow" below)
+
+# Integration
+
+(WIP)
+
+This project provides a "middle-end" for syncing from Obsidian to TaskWarrior, JIRA to TaskWarrior, and TaskWarrior to JIRA.
+It contains a model of how I think of tasks and what attributes / properties I use to manage tasks, and code for syncing from
+that model to the other systems. It does not store any tasks on its own -- instead it loads from one or more "backends" (Obsidian, 
+TaskWarrior, or JIRA) into that canonical model, and can propagate diffs from one system to another.
+
+I'm not trying to solve any generalized synchronization problems, so, e.g., conflicts are things this can't handle. If a task
+has been updated in more than one system, we'll just identify that and bail out, leaving the conflicts to be resolved by handle.
+
+# Workflow
 
 This project implements a few operations for helping to enable my personal favorite task management strategy in
 TaskWarrior. It's a two-layer strategy where I have some set of tasks that are my currently prioritized -- the ones
@@ -24,3 +45,5 @@ There are six operations available:
 This project is a frontend to TaskWarrior for performing those six operations, plus various housekeeping (like removing
 `sortOrder` from tasks in the backlog and compacting the existing `sortOrder`s so they're not super spread out after
 a bunch of `prioritize` and `deprioritize` operations have taken place.
+
+

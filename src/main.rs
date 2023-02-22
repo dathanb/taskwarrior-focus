@@ -46,15 +46,12 @@ fn handle_gc() -> Result<()> {
 fn handle_prioritize_cmd(sub_matches: &ArgMatches) -> Result<()> {
     let id: &String = sub_matches.get_one::<String>("id").expect("id is a required option, so should always have a value");
 
-    let tasks = get_all_tasks()?;
+    let focused_tasks = get_focused_tasks()?;
 
-    let target_task = tasks.iter()
-        .find(|task| &task.uuid == id || task.id.is_some_and(|tid| &tid.to_string() == id))
-        .ok_or(anyhow!("No task with id {} found", id))?;
-
-    let focused_tasks: Vec<&Task> = tasks.iter()
-                                         .filter(|t| t.tags.contains(&"focus".to_string()))
-                                         .collect();
+    let target_task = focused_tasks.iter()
+                                   .find(|task| &task.uuid == id || task.id.is_some_and(|tid| &tid.to_string() == id))
+                                   .ok_or(anyhow!("No focused task with id {} found. Did you get the id wrong? Or is it a backlog task?", id))?
+        .clone();
 
     let mut min_sort_order = f64::MAX;
     for task in focused_tasks {
@@ -77,15 +74,12 @@ fn handle_prioritize_cmd(sub_matches: &ArgMatches) -> Result<()> {
 fn handle_deprioritize_cmd(sub_matches: &ArgMatches) -> Result<()> {
     let id: &String = sub_matches.get_one::<String>("id").expect("id is a required option, so should always have a value");
 
-    let tasks = get_all_tasks()?;
+    let focused_tasks = get_focused_tasks()?;
 
-    let target_task = tasks.iter()
-                           .find(|task| &task.uuid == id || task.id.is_some_and(|tid| &tid.to_string() == id))
-                           .ok_or(anyhow!("No task with id {} found", id))?;
-
-    let focused_tasks: Vec<&Task> = tasks.iter()
-                                         .filter(|t| t.tags.contains(&"focus".to_string()))
-                                         .collect();
+    let target_task = focused_tasks.iter()
+                                   .find(|task| &task.uuid == id || task.id.is_some_and(|tid| &tid.to_string() == id))
+                                   .ok_or(anyhow!("No task with id {} found", id))?
+        .clone();
 
     let mut max_sort_order = f64::MIN;
     for task in focused_tasks {
@@ -109,7 +103,7 @@ fn clean_up_non_focus_tasks(tasks: &Vec<Task>) -> Result<()> {
     let mut task_ids_to_clean: Vec<String> = Vec::new();
 
     for task in tasks {
-        if !task.tags.contains(&"focus".to_string()) && task.udas.contains_key("sortOrder") {
+        if task.tags.contains(&"backlog".to_string()) && task.udas.contains_key("sortOrder") {
             task_ids_to_clean.push(task.uuid.clone());
         }
     }
@@ -123,7 +117,7 @@ fn clean_up_non_focus_tasks(tasks: &Vec<Task>) -> Result<()> {
 
 fn compact_sort_order(tasks: &Vec<Task>) -> Result<()> {
     let focused_tasks: Vec<&Task> = tasks.iter()
-                                         .filter(|t| t.tags.contains(&"focus".to_string()))
+                                         .filter(|t| !t.tags.contains(&"backlog".to_string()))
                                          .collect();
 
     struct TaskSortOrder(String, f64);
@@ -154,6 +148,15 @@ fn get_all_tasks() -> Result<Vec<Task>> {
         .output()?;
     let command_output = String::from_utf8(output.stdout)?;
     Ok(serde_json::from_str(command_output.as_str())?)
+}
+
+fn get_focused_tasks() -> Result<Vec<Task>> {
+    Ok(
+        get_all_tasks()?
+            .into_iter()
+            .filter(|t| !t.tags.contains(&"backlog".to_string()))
+            .collect()
+    )
 }
 
 fn remove_sort_order(uuid: String) -> Result<()> {
